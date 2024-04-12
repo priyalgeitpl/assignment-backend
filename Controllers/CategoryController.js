@@ -11,9 +11,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.saveCategories = exports.generateCategories = exports.getCategory = void 0;
 const client_1 = require("@prisma/client");
+const faker_1 = require("@faker-js/faker");
 const prisma = new client_1.PrismaClient();
 const fs = require('fs');
-const faker_1 = require("@faker-js/faker");
 const getCategory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const categories = yield prisma.category.findMany({

@@ -12,11 +12,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.findUser = exports.signUp = exports.verifyEmail = exports.getAllUsers = void 0;
+exports.findUser = exports.sendEmail = exports.verifyEmail = exports.saveCategories = exports.getAllUsers = void 0;
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const nodemailer = require('nodemailer');
+const generateToken = (user) => {
+    return jsonwebtoken_1.default.sign({ id: user.id, email: user.email }, 'secretKey', { expiresIn: '1h' });
+};
+const verifyToken = (token) => {
+    return jsonwebtoken_1.default.verify(token, 'secretKey');
+};
 function getAllUsers(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -30,40 +37,67 @@ function getAllUsers(req, res) {
     });
 }
 exports.getAllUsers = getAllUsers;
+function saveCategories(req, res) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { userId, categories } = req.body;
+            const updatedUser = yield prisma.user.update({
+                where: {
+                    id: userId
+                },
+                data: {
+                    category: categories
+                }
+            });
+            res.status(200).json({ message: 'Categories Saved !', user: updatedUser });
+        }
+        catch (error) {
+            console.error("errorr", error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    });
+}
+exports.saveCategories = saveCategories;
 function verifyEmail(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-
-            const { email, code, password, name } = req.body;
-
+            const { email, code } = req.body;
             if (!email || !code) {
                 return res.status(400).json({ error: 'Invalid input data' });
             }
-            const verifiedUser = yield prisma.user.findFirst({
+            const existingUser = yield prisma.user.findFirst({
                 where: {
                     email: email,
-                    code: code
                 },
             });
-            if (verifiedUser) {
-                res.status(200).json({ message: 'Email verified successfully' });
+            if (existingUser.code === code) {
+                const updatedUser = yield prisma.user.update({
+                    where: {
+                        id: existingUser.id
+                    },
+                    data: {
+                        isVerified: true
+                    }
+                });
+                res.status(201).json({ message: 'User Registered successfully' });
+            }
+            else if (existingUser.code !== code) {
+                res.status(400).json({ message: 'Verification code is invalid !' });
             }
             else {
-                res.status(400).json({ error: 'Invalid verification code or email' });
+                res.status(500).json({ error: 'error registering user' });
             }
         }
         catch (error) {
-            console.error('Error verifying email:', error);
             return res.status(500).json({ error: 'Internal server error' });
         }
     });
 }
-
 exports.verifyEmail = verifyEmail;
-function signUp(req, res) {
+function sendEmail(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
-        const { name, email, password } = req.body;
         try {
+            const { email, password, name } = req.body;
             const existingUser = yield prisma.user.findUnique({
                 where: {
                     email: email
@@ -72,14 +106,24 @@ function signUp(req, res) {
             if (existingUser) {
                 return res.status(409).json({ error: 'User Already Exists!' });
             }
+            const hashedPassword = bcrypt_1.default.hashSync(password, bcrypt_1.default.genSaltSync(10));
             const verificationCode = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
+            const newUser = yield prisma.user.create({
+                data: {
+                    name,
+                    email,
+                    password: hashedPassword,
+                    code: verificationCode,
+                    isVerified: false
+                }
+            });
             const transporter = nodemailer.createTransport({
                 host: 'smtp.gmail.com',
                 port: 587,
                 secure: false,
                 auth: {
                     user: 'tejas.p2468@gmail.com',
-                    pass: 'fhdx ceer bdhj avfr'
+                    pass: 'kcmd hqau lrfq akpk'
                 }
             });
             const mailOptions = {
@@ -93,27 +137,18 @@ function signUp(req, res) {
                     console.error('Error sending email:', error);
                     return res.status(500).json({ error: 'Failed to send verification email' });
                 }
-                console.log('Email sent:', info.response);
-                return res.status(201).json();
-            });
-
-            const hashedPassword = bcrypt_1.default.hashSync(password, bcrypt_1.default.genSaltSync(10));
-            const newUser = yield prisma.user.create({
-                data: {
-                    name,
-                    email,
-                    password: hashedPassword,
-                    code: verificationCode
+                else {
+                    console.log('Email sent:', info.response);
+                    return res.status(200).json({ message: 'Email Send successfully !' });
                 }
             });
         }
         catch (error) {
-            console.error('Error creating user:', error);
-            return res.status(500).json({ error: 'Internal server error' });
+            throw error;
         }
     });
 }
-
+exports.sendEmail = sendEmail;
 function findUser(req, res) {
     return __awaiter(this, void 0, void 0, function* () {
         const { email, password } = req.body;
@@ -126,7 +161,9 @@ function findUser(req, res) {
             if (existingUser) {
                 const passwordMatch = yield bcrypt_1.default.compare(password, existingUser.password);
                 if (passwordMatch) {
-                    res.status(200).json({ message: 'Logged In' });
+                    const token = generateToken(existingUser);
+                    existingUser.token = token;
+                    res.status(200).json({ message: 'Logged In', user: existingUser });
                 }
                 else {
                     res.status(401).json({ error: 'Invalid credentials' });
@@ -145,4 +182,5 @@ function findUser(req, res) {
         }
     });
 }
-module.exports = { getAllUsers, signUp, findUser, verifyEmail };
+exports.findUser = findUser;
+module.exports = { getAllUsers, saveCategories, findUser, verifyEmail, sendEmail };
