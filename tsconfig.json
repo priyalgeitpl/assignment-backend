@@ -3,8 +3,8 @@
     "target": "es6",
     "module": "commonjs",
     "strict": true,
-    "outDir": "out",
-    "sourceMap": true,
+    "outDir": "",
+    "sourceMap": false,
     "esModuleInterop": true,
     "typeRoots": [
       "./types",
