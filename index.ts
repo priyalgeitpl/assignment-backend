@@ -13,7 +13,7 @@ app.use(cors());
 app.use('/', userRoutes);
 app.use('/', CategoryRoutes);
 
-app.get('/', (req: Request, res: Response) => {
+app.get('/hello', (req: Request, res: Response) => {
     res.send('Hello, World! This is your Node.js server.');
 });
 
